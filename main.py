@@ -6,7 +6,7 @@ from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandle
 
 # ലോഗിങ് സെറ്റ് ചെയ്യുക
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
-logger = logging.getLogger(name)
+logger = logging.getLogger(__name__)
 
 # /start കമാൻഡ്
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -85,7 +85,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(chat_id=query.message.chat_id, text=f"❌ Download failed: {str(e)}")
 
 def main():
-    # ബോട്ട് ടോക്കൺ പൂർണ്ണമായും Environment Variable വഴി മാത്രം എടുക്കുന്നു (നേരിട്ട് ടോക്കൺ ഇല്ല)
+    # ബോട്ട് ടോക്കൺ പൂർണ്ണമായും Environment Variable വഴി മാത്രം എടുക്കുന്നു
     TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
     
     if not TOKEN:
@@ -93,12 +93,12 @@ def main():
     
     app = ApplicationBuilder().token(TOKEN).build()
 
-app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(CallbackQueryHandler(button_handler))
 
     print("JioHotstar Downloader Bot is running...")
     app.run_polling()
 
-if name == "main":
+if __name__ == "__main__":
     main()
