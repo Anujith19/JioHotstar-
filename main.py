@@ -52,17 +52,22 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         quality = context.user_data.get('quality', '720p')
         height = quality.replace('p', '')
         
-        # Environment Variable-ൽ നിന്ന് ഹോസ്റ്റാർ ടോക്കൺ എടുക്കുന്നു
-        hotstar_token = os.getenv("HOTSTAR_TOKEN")
+        # Environment Variable-ൽ നിന്ന് ഹോസ്റ്റാർ കുക്കികൾ എടുക്കുന്നു
+        hotstar_cookies = os.getenv("HOTSTAR_COOKIES")
         
-        # yt-dlp സെറ്റിങ്സ്
+        # yt-dlp സെറ്റിങ്സ് (ഇതിൽ പ്രോക്സിയും കുക്കിയും ചേർത്തിട്ടുണ്ട്)
         ydl_opts = {
             'format': f'best[height<={height}]',
             'outtmpl': 'downloads/%(title)s.%(ext)s',
+            'proxy': 'http://103.66.12.225:8080',  # ഇന്ത്യൻ പ്രോക്സി അഡ്രസ്
         }
         
-        if hotstar_token:
-            ydl_opts['http_headers'] = {'Authorization': f'Bearer {hotstar_token}'}
+        # കുക്കികൾ ഉണ്ടെങ്കിൽ അത് ഫയലായി സേവ് ചെയ്ത് yt-dlp-ലേക്ക് നൽകുന്നു
+        if hotstar_cookies:
+            cookie_file_path = "cookies.txt"
+            with open(cookie_file_path, "w", encoding="utf-8") as f:
+                f.write(hotstar_cookies)
+            ydl_opts['cookiefile'] = cookie_file_path
 
         try:
             os.makedirs('downloads', exist_ok=True)
@@ -79,13 +84,14 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             # ഫയൽ ഡിലീറ്റ് ചെയ്ത് സ്റ്റോറേജ് ക്ലീൻ ചെയ്യുന്നു
             os.remove(filename)
+            if os.path.exists("cookies.txt"):
+                os.remove("cookies.txt")
             
         except Exception as e:
             logger.error(f"Error: {e}")
             await context.bot.send_message(chat_id=query.message.chat_id, text=f"❌ Download failed: {str(e)}")
 
 def main():
-    # ബോട്ട് ടോക്കൺ പൂർണ്ണമായും Environment Variable വഴി മാത്രം എടുക്കുന്നു
     TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
     
     if not TOKEN:
@@ -102,3 +108,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+        
