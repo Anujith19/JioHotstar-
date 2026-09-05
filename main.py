@@ -8,6 +8,10 @@ from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandle
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# ⚠️ Render/Heroku-ൽ Environment Variable ആയി PROXY കൊടുത്തിട്ടില്ലെങ്കിൽ താഴെ പറയുന്ന ഡിഫോൾട്ട് പ്രോക്സി ഉപയോഗിക്കും.
+# ആവശ്യമെങ്കിൽ 'http://139.59.59.122:8012' എന്ന ഭാഗത്ത് പുതിയ പ്രോക്സി മാറ്റാം.
+DEFAULT_PROXY = "http://139.59.59.122:8012"
+
 # /start കമാൻഡ്
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("👋 Welcome to JioHotstar Downloader Bot!\nSend any JioHotstar video link to download.")
@@ -74,10 +78,22 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             format_spec = f'bestvideo[height<={height}]+bestaudio/best[height<={height}]/best'
             out_extension = 'downloads/%(title)s.%(ext)s'
         
+        # PROXY വേരിയബിൾ പരിശോധിക്കുന്നു (Render/Heroku Env Variable അല്ലെങ്കിൽ ഡിഫോൾട്ട് പ്രോക്സി)
+        proxy_address = os.getenv("PROXY", DEFAULT_PROXY)
+        
         ydl_opts = {
             'format': format_spec,
             'outtmpl': out_extension,
+            'geo_bypass': True,
+            'geo_bypass_country': 'IN',
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            }
         }
+        
+        # പ്രോക്സി ചേർക്കുന്നു
+        if proxy_address:
+            ydl_opts['proxy'] = proxy_address
         
         # Cookies പരിശോധന (Environment Variable അല്ലെങ്കിൽ cookies.txt ഫയൽ)
         hotstar_cookies = os.getenv("HOTSTAR_COOKIES")
