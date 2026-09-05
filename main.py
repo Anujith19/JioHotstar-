@@ -19,55 +19,75 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if "hotstar.com" in text:
         context.user_data['hotstar_url'] = text
         
-        # ക്വാളിറ്റി സെലക്ട് ചെയ്യാനുള്ള ബട്ടണുകൾ
+        # ക്വാളിറ്റികളും ഓഡിയോ സെലക്ഷനും ഉൾപ്പെടുത്തിയ ബട്ടണുകൾ
         keyboard = [
-            [InlineKeyboardButton("1080p (Full HD)", callback_data="q_1080p")],
-            [InlineKeyboardButton("720p (HD)", callback_data="q_720p")],
-            [InlineKeyboardButton("480p", callback_data="q_480p")]
+            [
+                InlineKeyboardButton("🎬 Best Quality", callback_data="q_best"),
+                InlineKeyboardButton("📺 1080p", callback_data="q_1080p")
+            ],
+            [
+                InlineKeyboardButton("📱 720p", callback_data="q_720p"),
+                InlineKeyboardButton("📱 480p", callback_data="q_480p")
+            ],
+            [
+                InlineKeyboardButton("⚡ 360p (Data Saver)", callback_data="q_360p"),
+                InlineKeyboardButton("🎵 Audio Only (MP3/M4A)", callback_data="q_audio")
+            ]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.message.reply_text("📥 Select video quality for download:", reply_markup=reply_markup)
+        await update.message.reply_text("📥 Select Quality or Audio Option:", reply_markup=reply_markup)
     else:
         await update.message.reply_text("Please send a valid JioHotstar link containing 'hotstar.com'.")
 
-# ബട്ടൺ ക്ലിക്ക് ചെയ്യുമ്പോൾ ഡൗൺലോഡിങ് പ്രോസസ്സ് ആരംഭിക്കുന്നത്
+# ബട്ടൺ ക്ലിക്ക് ചെയ്യുമ്പോൾ ഡൗൺലോഡിങ് പ്രോസസ്സ്
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
     if query.data.startswith("q_"):
-        quality = query.data.split("_")[1]
-        context.user_data['quality'] = quality
+        selected_option = query.data.split("_")[1]
+        context.user_data['selected_option'] = selected_option
+        
+        display_text = "Audio Only" if selected_option == "audio" else f"{selected_option}"
         
         keyboard = [
-            [InlineKeyboardButton("Submit / Download 🚀", callback_data="start_download")]
+            [InlineKeyboardButton("🚀 Start Download", callback_data="start_download")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        await query.edit_message_text(text=f"Selected Quality: {quality}\nClick Submit to start downloading:", reply_markup=reply_markup)
+        await query.edit_message_text(text=f"Selected Option: {display_text}\nClick below to start downloading:", reply_markup=reply_markup)
         
     elif query.data == "start_download":
-        await query.edit_message_text(text="⏳ Downloading video from JioHotstar... Please wait.")
+        await query.edit_message_text(text="⏳ Processing & Downloading from JioHotstar... Please wait.")
         
         url = context.user_data.get('hotstar_url')
-        quality = context.user_data.get('quality', '720p')
-        height = quality.replace('p', '')
+        selected_option = context.user_data.get('selected_option', 'best')
         
-        # Environment Variable-ൽ നിന്ന് ഹോസ്റ്റാർ കുക്കികൾ എടുക്കുന്നു
-        hotstar_cookies = os.getenv("HOTSTAR_COOKIES")
+        # Format Selection (വീഡിയോ/ഓഡിയോ അനുസരിച്ച് മാറ്റം വരുത്തുന്നു)
+        if selected_option == "audio":
+            format_spec = 'bestaudio/best'
+            out_extension = 'downloads/%(title)s.%(ext)s'
+        elif selected_option == "best":
+            format_spec = 'bestvideo+bestaudio/best'
+            out_extension = 'downloads/%(title)s.%(ext)s'
+        else:
+            height = selected_option.replace('p', '')
+            format_spec = f'bestvideo[height<={height}]+bestaudio/best[height<={height}]/best'
+            out_extension = 'downloads/%(title)s.%(ext)s'
         
-        # yt-dlp സെറ്റിങ്സ് (ഇതിൽ പ്രോക്സിയും കുക്കിയും ചേർത്തിട്ടുണ്ട്)
         ydl_opts = {
-            'format': f'best[height<={height}]',
-            'outtmpl': 'downloads/%(title)s.%(ext)s',
-            'proxy': 'http://103.66.12.225:8080',  # ഇന്ത്യൻ പ്രോക്സി അഡ്രസ്
+            'format': format_spec,
+            'outtmpl': out_extension,
         }
         
-        # കുക്കികൾ ഉണ്ടെങ്കിൽ അത് ഫയലായി സേവ് ചെയ്ത് yt-dlp-ലേക്ക് നൽകുന്നു
+        # Cookies പരിശോധന (Environment Variable അല്ലെങ്കിൽ cookies.txt ഫയൽ)
+        hotstar_cookies = os.getenv("HOTSTAR_COOKIES")
         if hotstar_cookies:
             cookie_file_path = "cookies.txt"
             with open(cookie_file_path, "w", encoding="utf-8") as f:
                 f.write(hotstar_cookies)
             ydl_opts['cookiefile'] = cookie_file_path
+        elif os.path.exists("cookies.txt"):
+            ydl_opts['cookiefile'] = "cookies.txt"
 
         try:
             os.makedirs('downloads', exist_ok=True)
@@ -78,14 +98,16 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             await context.bot.send_message(chat_id=query.message.chat_id, text="✅ Download completed! Uploading to Telegram...")
             
-            # ടെലിഗ്രാമിലേക്ക് വീഡിയോ അയക്കുന്നു
-            with open(filename, 'rb') as video_file:
-                await context.bot.send_video(chat_id=query.message.chat_id, video=video_file)
+            # ഓഡിയോ ആണെങ്കിൽ Audio ആയും, വീഡിയോ ആണെങ്കിൽ Video ആയും അയക്കുന്നു
+            with open(filename, 'rb') as file_data:
+                if selected_option == "audio":
+                    await context.bot.send_audio(chat_id=query.message.chat_id, audio=file_data)
+                else:
+                    await context.bot.send_video(chat_id=query.message.chat_id, video=file_data)
             
-            # ഫയൽ ഡിലീറ്റ് ചെയ്ത് സ്റ്റോറേജ് ക്ലീൻ ചെയ്യുന്നു
-            os.remove(filename)
-            if os.path.exists("cookies.txt"):
-                os.remove("cookies.txt")
+            # ഫയൽ ഡിലീറ്റ് ചെയ്ത് ഫ്രീ ആക്കുന്നു
+            if os.path.exists(filename):
+                os.remove(filename)
             
         except Exception as e:
             logger.error(f"Error: {e}")
@@ -108,4 +130,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-        
+    
